@@ -45,7 +45,7 @@ export class LobbyController {
     this.room.onAllPlayersReady(() => this.runActivity("All players ready", () => this.allPlayersReady()));
     this.room.onMatchStarted(() => this.runActivity("Match started", () => this.beginMatch()));
     this.room.onMatchFinished(s => this.runActivity(`Match finished: ${s.length} result(s)`, () => this.finish(s)));
-    this.room.onClosed(() => { this.logActivity("info", "Bancho closed this lobby channel."); for (const listener of this.closeListeners) listener(); });
+    this.room.onClosed(() => { this.logActivity("info", "Bancho closed this lobby channel."); void this.removeEmptyHistory(); for (const listener of this.closeListeners) listener(); });
     await this.joined();
     this.runActivity("Initial host check", () => this.hostChanged(this.room.host()));
     if (this.room.beatmapId()) await this.validateSelection(this.room.beatmapId()!);
@@ -174,7 +174,7 @@ export class LobbyController {
     if (cmd === "!bug") return void this.room.say("Report a bug: https://github.com/ronaldonater/osu-ahr-bot/issues");
     if (cmd === "!donate") return void this.room.say("Support the bot: https://ko-fi.com/ronaldonater");
     if (["!regulations"].includes(cmd)) return void this.showRegulations();
-    if (["!version", "!v"].includes(cmd)) return void this.room.say("osu-ahr-bot v0.1.17");
+    if (["!version", "!v"].includes(cmd)) return void this.room.say("osu-ahr-bot v0.1.18");
     if (["!playtime", "!pt"].includes(cmd)) return void this.playtime(p, value || undefined);
     if (["!timeleft", "!tl"].includes(cmd)) return void this.timeleft();
     if (["!ostats", "!os"].includes(cmd)) { const { username, mode } = this.usernameAndMode(args); return void this.stats(p, username, mode); }
@@ -195,7 +195,7 @@ export class LobbyController {
     if (cmd === "*abort") return void this.abortMatch();
     if (cmd === "*order") return void this.order(value);
     if (cmd === "*resetelo") return void this.resetElo(args[0]);
-    if (cmd === "*close") return void this.closeLobby();
+    if (cmd === "*close") return void this.close();
     if (cmd === "*eventchance") return void this.setEventChance(args[0]);
     if (cmd === "*ranked") return void this.setRanked(args[0]);
     if (cmd === "*kick") return void this.kick(value);
@@ -535,7 +535,11 @@ export class LobbyController {
     await this.persist();
     await this.room.say(`Lobby ranking is now ${this.config.ranked ? "enabled — matches count toward ELO and stats." : "disabled — matches are unranked and do not count toward ELO or stats."}`);
   }
-  async close() { await this.closeLobby(); }
+  async close() { await this.closeLobby(); await this.removeEmptyHistory(); }
+  private async removeEmptyHistory() {
+    const matches = await this.db.match.count({ where: { lobbyId: this.lobbyId } });
+    if (matches === 0) await this.db.lobby.delete({ where: { id: this.lobbyId } }).catch(() => undefined);
+  }
   async updateRegulations(regulations: Partial<LobbyConfig["regulations"]>, eventChance?: number, details?: { title?: string; password?: string; removePassword?: boolean; ranked?: boolean; autoRecreateOnInactivity?: boolean }) {
     this.config.regulations = { ...DEFAULT_CONFIG.regulations, ...regulations };
     if (eventChance !== undefined) this.config.eventChance = eventChance;
