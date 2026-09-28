@@ -10,9 +10,11 @@ import { DEFAULT_CONFIG, type LobbyConfig } from "./types.js";
 const env = z.object({ DATABASE_URL: z.string(), OSU_CLIENT_ID: z.string(), OSU_CLIENT_SECRET: z.string(), BANCHO_USERNAME: z.string(), BANCHO_PASSWORD: z.string(), BANCHO_API_KEY: z.string().min(1), DASHBOARD_TOKEN: z.string().min(12), PORT: z.coerce.number().default(3000) }).parse(process.env);
 const db = new PrismaClient(); const osu = new OsuApi(env.OSU_CLIENT_ID, env.OSU_CLIENT_SECRET); const bancho = new BanchoGateway(env.BANCHO_USERNAME, env.BANCHO_PASSWORD, env.BANCHO_API_KEY);
 const controllers = new Map<number, LobbyController>();
+const recreatingLobbies = new Set<number>();
 const configSchema = z.object({
   eventChance: z.number().min(0).max(1).optional(),
   ranked: z.boolean().optional(),
+  autoRecreateOnInactivity: z.boolean().optional(),
   teamMode: z.number().int().min(0).max(3).optional(), scoreMode: z.number().int().min(0).max(3).optional(),
   regulations: z.object({
     enabled: z.boolean().optional(), minStar: z.number().min(0).optional(), maxStar: z.number().min(0).optional(),
@@ -32,7 +34,23 @@ async function createLobby(input: { title: string; password?: string; config?: P
   const banchoId = room.id();
   if (!banchoId) throw new Error("Could not identify newly-created multiplayer lobby");
   const lobby = await db.lobby.create({ data: { banchoId, name: input.title, password: input.password, config: config as any } });
-  const controller = new LobbyController(db, lobby.id, room, osu, config); await controller.start(); controllers.set(lobby.id, controller); return lobby;
+  const controller = new LobbyController(db, lobby.id, room, osu, config);
+  controller.onClosed(() => void recreateClosedLobby(lobby.id, controller));
+  await controller.start(); controllers.set(lobby.id, controller); return lobby;
+}
+
+async function recreateClosedLobby(lobbyId: number, controller: LobbyController) {
+  controllers.delete(lobbyId);
+  if (!controller.shouldAutoRecreate() || recreatingLobbies.has(lobbyId)) return;
+  recreatingLobbies.add(lobbyId);
+  try {
+    const replacement = await createLobby(controller.recreationInput());
+    console.log(`Recreated inactive lobby ${lobbyId} as lobby ${replacement.id} (mp/${replacement.banchoId}).`);
+  } catch (error) {
+    console.error(`Could not recreate inactive lobby ${lobbyId}:`, error);
+  } finally {
+    recreatingLobbies.delete(lobbyId);
+  }
 }
 
 async function main() {
@@ -93,14 +111,15 @@ async function main() {
   app.patch("/lobbies/:id/regulations", async (req, res, next) => { try {
     const id = z.coerce.number().int().positive().parse(req.params.id); const controller = controllers.get(id);
     if (!controller) return res.status(404).json({ error: "This lobby is not active in the current bot session." });
-    const body = z.object({ regulations: configSchema.shape.regulations.unwrap(), eventChance: z.number().min(0).max(1).optional(), ranked: z.boolean().optional(), title: z.string().min(3).max(80).optional(), password: z.string().min(1).max(64).optional(), removePassword: z.boolean().optional() }).parse(req.body);
+    const body = z.object({ regulations: configSchema.shape.regulations.unwrap(), eventChance: z.number().min(0).max(1).optional(), ranked: z.boolean().optional(), autoRecreateOnInactivity: z.boolean().optional(), title: z.string().min(3).max(80).optional(), password: z.string().min(1).max(64).optional(), removePassword: z.boolean().optional() }).parse(req.body);
     await controller.updateRegulations(body.regulations ?? {}, body.eventChance, body);
     return res.json({ ok: true });
   } catch (e) { next(e); } });
   app.delete("/lobbies/:id", async (req, res, next) => { try {
     const id = z.coerce.number().int().positive().parse(req.params.id); const controller = controllers.get(id);
-    if (!controller) return res.status(404).json({ error: "This lobby is not active in the current bot session." });
-    await controller.close(); controllers.delete(id); return res.status(204).send();
+    if (controller) { await controller.close(); controllers.delete(id); return res.status(204).send(); }
+    await db.lobby.delete({ where: { id } });
+    return res.status(204).send();
   } catch (e) { next(e); } });
   app.use((e: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => res.status(400).json({ error: e instanceof Error ? e.message : "unknown error" }));
   app.listen(env.PORT, () => console.log(`Dashboard API listening on :${env.PORT}`));

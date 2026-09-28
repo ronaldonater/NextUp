@@ -19,6 +19,7 @@ export interface RoomActions {
   onAllPlayersReady(listener: () => void): void;
   onMatchStarted(listener: () => void): void;
   onMatchFinished(listener: (scores: Array<{ player: Participant; score: number; team?: "red" | "blue" }>) => void): void;
+  onClosed(listener: () => void): void;
   onActivity(listener: (activity: RoomActivity) => void): void;
 }
 /** Shared across every lobby because Bancho's message cap applies to the bot account, not an individual room. */
@@ -95,5 +96,6 @@ class BanchoRoom implements RoomActions {
   onAllPlayersReady(listener: () => void) { this.channel.lobby.on("allPlayersReady", listener); }
   onMatchStarted(listener: () => void) { this.channel.lobby.on("matchStarted", listener); }
   onMatchFinished(listener: (scores: any[]) => void) { this.channel.lobby.on("matchFinished", (scores: any[]) => listener(scores.flatMap((score: any) => { const player = this.participant(score?.player?.user, "Match result"); return player ? [{ player, score: score.score, team: score.player.team }] : []; }))); }
+  onClosed(listener: () => void) { this.channel.on("PART", (member: any) => { if (member?.user?.isClient?.()) listener(); }); }
   onActivity(listener: (activity: RoomActivity) => void) { this.activityListeners.add(listener); }
 }

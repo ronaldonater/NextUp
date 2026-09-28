@@ -13,11 +13,11 @@ export interface Regulations {
 }
 export interface LobbyConfig {
   title: string; size?: number; password?: string; teamMode: TeamMode; scoreMode: ScoreMode;
-  mods: string[]; regulations: Regulations; eventChance: number; ranked: boolean;
+  mods: string[]; regulations: Regulations; eventChance: number; ranked: boolean; autoRecreateOnInactivity: boolean;
   locks: { size?: boolean; password?: boolean; mods?: boolean; title?: boolean };
 }
 export const DEFAULT_CONFIG: LobbyConfig = {
-  title: "AHR lobby", teamMode: 0, scoreMode: 0, mods: [], eventChance: 0.08, ranked: true,
+  title: "AHR lobby", teamMode: 0, scoreMode: 0, mods: [], eventChance: 0.08, ranked: true, autoRecreateOnInactivity: false,
   regulations: { enabled: true, allowConvert: false, freeMod: true }, locks: {}
 };
 export interface MapInfo {

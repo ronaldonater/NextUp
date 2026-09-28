@@ -25,8 +25,12 @@ export class LobbyController {
   private timer?: NodeJS.Timeout; private startedAt?: Date; private matchId?: number; private activeBeatmapId?: number; private matchGameMode?: GameMode; private selectedGameMode?: GameMode; private matchParticipants: Participant[] = []; private teamEvent = false; private eventActive = false; private lastValidMapId?: number; private lastAnnouncedMapId?: number; private passwordSetUntil = 0;
   private turnTimer?: NodeJS.Timeout; private turnWarnings: NodeJS.Timeout[] = []; private turnHostId?: number; private turnMapId?: number; private turnStage?: "select" | "start"; private intendedHostId?: number;
   private readonly activityLog: LobbyActivity[] = [];
+  private readonly closeListeners = new Set<() => void>(); private closeRequested = false;
   constructor(private db: PrismaClient, private lobbyId: number, private room: RoomActions, private osu: OsuApi, config: LobbyConfig = DEFAULT_CONFIG) { this.config = { ...DEFAULT_CONFIG, ...config, ranked: config.ranked !== false, regulations: { ...DEFAULT_CONFIG.regulations, ...config.regulations }, locks: { ...DEFAULT_CONFIG.locks, ...config.locks } }; }
   activity() { return this.activityLog.slice(-200); }
+  onClosed(listener: () => void) { this.closeListeners.add(listener); }
+  shouldAutoRecreate() { return this.config.autoRecreateOnInactivity && !this.closeRequested; }
+  recreationInput() { return { title: this.config.title, password: this.config.password, config: this.config }; }
   private logActivity(level: LobbyActivity["level"], message: string) { this.activityLog.push({ at: new Date().toISOString(), level, message }); if (this.activityLog.length > 200) this.activityLog.shift(); }
   private runActivity(label: string, task: () => Promise<unknown>) { this.logActivity("info", label); void task().catch(error => this.logActivity("error", `${label} failed: ${error instanceof Error ? error.message : String(error)}`)); }
   async start() {
@@ -41,6 +45,7 @@ export class LobbyController {
     this.room.onAllPlayersReady(() => this.runActivity("All players ready", () => this.allPlayersReady()));
     this.room.onMatchStarted(() => this.runActivity("Match started", () => this.beginMatch()));
     this.room.onMatchFinished(s => this.runActivity(`Match finished: ${s.length} result(s)`, () => this.finish(s)));
+    this.room.onClosed(() => { this.logActivity("info", "Bancho closed this lobby channel."); for (const listener of this.closeListeners) listener(); });
     await this.joined();
     this.runActivity("Initial host check", () => this.hostChanged(this.room.host()));
     if (this.room.beatmapId()) await this.validateSelection(this.room.beatmapId()!);
@@ -161,13 +166,15 @@ export class LobbyController {
   }
   private async handle(p: Participant, raw: string) {
     if (!raw.startsWith("!") && !raw.startsWith("*")) return;
+    this.logActivity("info", `Command from ${p.username}: ${raw}`);
     await this.syncPlayers(); const [rawCommand, ...args] = raw.trim().split(/\s+/); const cmd = rawCommand.toLowerCase(); const value = args.join(" ");
     if (cmd.startsWith("*") && !admins.has(p.id)) return void this.room.say(`${p.username}: administrator permission required.`);
     if (cmd === "!queue") return void this.showQueue();
     if (cmd === "!cmds") return void this.room.say("Command list: https://ronaldonater.com/osu-ahr");
     if (cmd === "!bug") return void this.room.say("Report a bug: https://github.com/ronaldonater/osu-ahr-bot/issues");
+    if (cmd === "!donate") return void this.room.say("Support the bot: https://ko-fi.com/ronaldonater");
     if (["!regulations"].includes(cmd)) return void this.showRegulations();
-    if (["!version", "!v"].includes(cmd)) return void this.room.say("osu-ahr-bot v0.1.16");
+    if (["!version", "!v"].includes(cmd)) return void this.room.say("osu-ahr-bot v0.1.17");
     if (["!playtime", "!pt"].includes(cmd)) return void this.playtime(p, value || undefined);
     if (["!timeleft", "!tl"].includes(cmd)) return void this.timeleft();
     if (["!ostats", "!os"].includes(cmd)) { const { username, mode } = this.usernameAndMode(args); return void this.stats(p, username, mode); }
@@ -509,6 +516,7 @@ export class LobbyController {
     await this.room.say(`${player.username} was removed from the lobby by an administrator.`);
   }
   private async closeLobby() {
+    this.closeRequested = true;
     this.stopTimer(); this.clearTurnTimer();
     await this.room.say("This lobby is being closed by an administrator.");
     await this.room.command("!mp close");
@@ -528,10 +536,11 @@ export class LobbyController {
     await this.room.say(`Lobby ranking is now ${this.config.ranked ? "enabled — matches count toward ELO and stats." : "disabled — matches are unranked and do not count toward ELO or stats."}`);
   }
   async close() { await this.closeLobby(); }
-  async updateRegulations(regulations: Partial<LobbyConfig["regulations"]>, eventChance?: number, details?: { title?: string; password?: string; removePassword?: boolean; ranked?: boolean }) {
+  async updateRegulations(regulations: Partial<LobbyConfig["regulations"]>, eventChance?: number, details?: { title?: string; password?: string; removePassword?: boolean; ranked?: boolean; autoRecreateOnInactivity?: boolean }) {
     this.config.regulations = { ...DEFAULT_CONFIG.regulations, ...regulations };
     if (eventChance !== undefined) this.config.eventChance = eventChance;
     if (details?.ranked !== undefined) this.config.ranked = details.ranked;
+    if (details?.autoRecreateOnInactivity !== undefined) this.config.autoRecreateOnInactivity = details.autoRecreateOnInactivity;
     if (details?.title && details.title !== this.config.title) {
       this.config.title = details.title;
       await this.room.setTitle(details.title);
