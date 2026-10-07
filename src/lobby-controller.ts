@@ -174,7 +174,7 @@ export class LobbyController {
     if (cmd === "!bug") return void this.room.say("Report a bug: https://github.com/ronaldonater/osu-ahr-bot/issues");
     if (cmd === "!donate") return void this.room.say("Support the bot: https://ko-fi.com/ronaldonater");
     if (["!regulations"].includes(cmd)) return void this.showRegulations();
-    if (["!version", "!v"].includes(cmd)) return void this.room.say("osu-ahr-bot v0.1.19");
+    if (["!version", "!v"].includes(cmd)) return void this.room.say("osu-ahr-bot v0.1.21");
     if (["!playtime", "!pt"].includes(cmd)) return void this.playtime(p, value || undefined);
     if (["!timeleft", "!tl"].includes(cmd)) return void this.timeleft();
     if (["!ostats", "!os"].includes(cmd)) { const { username, mode } = this.usernameAndMode(args); return void this.stats(p, username, mode); }
@@ -245,7 +245,8 @@ export class LobbyController {
   private regulationSummary() {
     const r = this.config.regulations;
     if (!r.enabled) return "Map regulations are currently disabled.";
-    const stars = r.minStar !== undefined || r.maxStar !== undefined ? `${r.minStar?.toFixed(2) ?? "any"}–${r.maxStar?.toFixed(2) ?? "any"}★` : "any star rating";
+    const formatStars = (value?: number) => value === undefined ? "any" : value.toFixed(4).replace(/\.?(0+)$/, "");
+    const stars = r.minStar !== undefined || r.maxStar !== undefined ? `${formatStars(r.minStar)}–${formatStars(r.maxStar)}★` : "any star rating";
     const length = r.minLength !== undefined || r.maxLength !== undefined ? `${r.minLength !== undefined ? fmt(r.minLength) : "any"}–${r.maxLength !== undefined ? fmt(r.maxLength) : "any"}` : "any length";
     const mode = r.gameMode ? r.gameMode[0].toUpperCase() + r.gameMode.slice(1) : "any mode";
     const statuses = r.allowedStatuses?.length ? r.allowedStatuses.join(", ") : "all statuses";
