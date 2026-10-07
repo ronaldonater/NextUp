@@ -90,23 +90,96 @@ The dashboard HTML, CSS, and client script live in [public/](public).
 
 ## Commands
 
-Players can run <code>!cmds</code> in a lobby to receive the complete, current command reference:
+Commands are case-insensitive. Username parameters can include spaces, and <code>mode</code> accepts <code>osu</code>, <code>taiko</code>, <code>catch</code>, or <code>mania</code>. Players can also use <code>!cmds</code> in a lobby to receive the web reference:
 
 > [ronaldonater.com/osu-ahr](https://ronaldonater.com/osu-ahr)
+
+### Player commands
 
 | Command | Purpose |
 | --- | --- |
 | <code>!queue</code> | Show the current host queue |
-| <code>!skip</code> | Pass the host turn, or vote to skip when you are not host |
-| <code>!start</code> | Start the match as host, or vote to start |
+| <code>!skip</code> | Skip as host, or vote to skip the current host |
+| <code>!autoskip on/off</code> | Toggle automatic skipping of your host turn |
+| <code>!start [seconds]</code> | Start as host after 0–120 seconds, or vote to start |
+| <code>!abort</code> | Vote to abort the active match |
+| <code>!votekick [username]</code> | Vote to remove a player from the lobby |
+| <code>!regulations</code> | Show the active map regulations |
 | <code>!ostats [username] [mode]</code> | Show local ELO and match statistics |
 | <code>!rank [username] [mode]</code> | Show a player's local ranking |
 | <code>!top [local] [mode]</code> | View the local or global ELO leaderboard |
-| <code>!bestscore [username]</code> | Show a global best score for the selected map |
-| <code>!autoskip on/off</code> | Automatically skip your host turn |
+| <code>!playtime</code> or <code>!pt [username]</code> | Show the current lobby-session playtime |
+| <code>!timeleft</code> or <code>!tl</code> | Show remaining time in the active match |
+| <code>!lastscore</code> or <code>!ls</code> | Show the most recent lobby result |
+| <code>!bestscore</code> or <code>!bs [username]</code> | Show a global best score for the selected map |
+| <code>!how</code> or <code>!h</code> | Explain the local ELO system |
+| <code>!version</code> or <code>!v</code> | Show the installed bot version |
 | <code>!donate</code> | Share the project support link |
+| <code>!bug</code> | Share the GitHub issue tracker |
+| <code>!cmds</code> | Share the online command reference |
 
-Administrative commands begin with <code>*</code>; permissions are controlled by <code>ADMIN_OSU_IDS</code>. The command reference includes the complete regulation and administrator command list.
+### Host-only commands
+
+| Command | Purpose |
+| --- | --- |
+| <code>!update</code> | Refresh the selected beatmap from osu! |
+| <code>!stop</code> | Cancel the pending start timer |
+| <code>!skip</code> | Immediately rotate to the next queued host |
+| <code>!start [seconds]</code> | Start the selected map |
+
+### Administrator commands
+
+Administrator commands begin with <code>*</code>; permissions are controlled by <code>ADMIN_OSU_IDS</code>.
+
+| Command | Purpose |
+| --- | --- |
+| <code>*start</code> | Start the selected map immediately |
+| <code>*skip</code> | Force host rotation |
+| <code>*abort</code> | Abort the active match |
+| <code>*kick [username]</code> | Remove a player from the lobby |
+| <code>*close</code> | Close the lobby |
+| <code>*order player1, player2, player3</code> | Replace the host queue order |
+| <code>*resetelo confirm</code> | Reset all players' ELO and competitive statistics |
+| <code>*eventchance [0-100]</code> | Set the random-event probability |
+| <code>*ranked on/off</code> | Toggle whether matches affect ELO and statistics |
+
+### Lobby settings and denylist
+
+| Command | Purpose |
+| --- | --- |
+| <code>*keep size [1-16]</code> | Set the lobby size and enable its lock setting |
+| <code>*keep password [password]</code> | Set and retain the password for a password-protected lobby |
+| <code>*keep mods [mods...]</code> | Set the lobby modifiers and enable their lock setting |
+| <code>*keep title [title]</code> | Set and retain the lobby title |
+| <code>*no keep size|password|mods|title</code> | Remove the selected lobby-setting lock |
+| <code>*denylist add [username]</code> | Deny a known player from the host queue |
+| <code>*denylist remove [username]</code> | Restore a denied player |
+
+### Map regulations
+
+Use <code>*regulation [setting] [value]</code>. Multiple numeric settings can be updated at once, for example <code>*regulation min_star=5.25 max_star=6.5999</code>.
+
+| Command | Purpose |
+| --- | --- |
+| <code>*regulation enable</code> | Enable regulation checking |
+| <code>*regulation disable</code> or <code>*no regulation</code> | Disable regulation checking |
+| <code>*regulation min_star [number]</code> | Set the minimum star rating |
+| <code>*regulation max_star [number]</code> | Set the maximum star rating |
+| <code>*regulation min_length [seconds]</code> | Set the minimum map length |
+| <code>*regulation max_length [seconds]</code> | Set the maximum map length |
+| <code>*regulation gamemode osu|taiko|fruits|mania</code> | Restrict the allowed osu! game mode |
+| <code>*regulation allow_convert</code> | Allow converted maps |
+| <code>*regulation disallow_convert</code> | Deny converted maps |
+| <code>*regulation freemod</code> | Enable Free Mod for the lobby configuration |
+| <code>*regulation no_freemod</code> | Disable Free Mod for the lobby configuration |
+| <code>*regulation status all</code> | Allow every supported beatmap status |
+| <code>*regulation status ranked loved qualified pending graveyard wip</code> | Set the allowed beatmap statuses |
+| <code>*regulation min_bpm [number]</code> / <code>max_bpm [number]</code> | Set the BPM range |
+| <code>*regulation min_ar [number]</code> / <code>max_ar [number]</code> | Set the approach-rate range |
+| <code>*regulation min_hp [number]</code> / <code>max_hp [number]</code> | Set the HP-drain range |
+| <code>*regulation min_od [number]</code> / <code>max_od [number]</code> | Set the overall-difficulty range |
+| <code>*regulation min_cs [number]</code> / <code>max_cs [number]</code> | Set the circle-size range |
+| <code>*regulation min_last_updated_year [year]</code> / <code>max_last_updated_year [year]</code> | Set the last-ranked or last-updated year range |
 
 ## ELO and match records
 
